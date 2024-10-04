@@ -90,35 +90,43 @@ async function loadProductFromR2(ctx, config, sku) {
 }
 
 export async function handleProductGetRequest(ctx, config) {
-  const sku = await resolveSku(ctx, config); // Determine SKU based on either SKU or URL key
+  // Determine SKU based on either provided SKU or URL key
+  const sku = await resolveSku(ctx, config);
 
-  if (!sku) {
-    return new Response('Either SKU or urlKey must be provided', { status: 400 });
+  let product;
+
+  // If SKU is resolved, try to load the product from R2
+  if (sku) {
+    product = await loadProductFromR2(ctx, config, sku);
   }
 
-  // Try to load the product from R2
-  const product = await loadProductFromR2(ctx, config, sku);
-
+  // If product isn't found, call getProduct with URL key if it's provided
   if (!product) {
-    // If not found in R2, try fetching the product via `getProduct`
+    // If product isn't found in R2 and a urlKey was provided, try to get it via getProduct
     const externalProduct = await getProduct(ctx, config, sku, config.urlKey);
 
     if (!externalProduct) {
-      // Return the appropriate error message based on what was provided in the request
+      // Return the appropriate error message if product not found after fallback
       const identifier = config.sku ? `SKU: ${sku}` : `urlKey: ${config.urlKey}`;
       return new Response(`Product with ${identifier} not found after fallback`, { status: 404 });
     }
 
+    // Save the external product to R2 for future requests
     await saveProductsToR2(ctx, config, [externalProduct]);
 
-    // Return the product fetched from external source
+    // Return the product fetched from the external source
     return new Response(JSON.stringify(externalProduct), {
       headers: { 'Content-Type': 'application/json' },
     });
   }
 
-  // Return the product found in R2
-  return new Response(JSON.stringify(product), {
-    headers: { 'Content-Type': 'application/json' },
-  });
+  // If product found in R2, return it
+  if (product) {
+    return new Response(JSON.stringify(product), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  // If neither SKU nor urlKey is provided, return a 400 error
+  return new Response('Either SKU or urlKey must be provided', { status: 400 });
 }

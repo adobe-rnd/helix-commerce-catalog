@@ -60,15 +60,14 @@ export const productFields = `
 `;
 
 /**
- * @param {{ urlkey?: string; sku?: string }} param0
+ * @param {{ urlKey?: string; sku?: string }} param0
  */
 export default ({
-  urlkey, sku,
+  urlKey, sku,
 }) => {
-  const filter = urlkey
-    ? { url_key: { eq: urlkey } }
+  const filter = urlKey
+    ? { url_key: { eq: urlKey } }
     : { sku: { eq: sku } };
-
   return {
     query: gql`
       query products($filter: ProductAttributeFilterInput) {
