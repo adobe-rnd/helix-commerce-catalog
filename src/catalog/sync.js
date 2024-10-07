@@ -15,6 +15,12 @@
 import coreProductsQuery from '../queries/core-all-products.js';
 import { getSyncTimestamp, saveProductsToR2, setSyncTimestamp } from '../utils/r2.js';
 
+/**
+ * Handle a request to sync the catalog
+ * @param {Context} ctx
+ * @param {Config} config
+ * @returns {Promise<Response>}
+ */
 export async function handleCatalogSyncRequest(ctx, config) {
   const { log } = ctx;
   const pageSize = 50;
@@ -47,11 +53,15 @@ export async function handleCatalogSyncRequest(ctx, config) {
 
   // Loop through remaining pages and merge results
   currentPage = 2;
+
+  const pageRequestPromises = [];
   while (currentPage <= totalPages) {
-    const pageData = await fetchPage(currentPage);
-    allItems = [...allItems, ...pageData.items];
+    pageRequestPromises.push(fetchPage(currentPage));
     currentPage += 1;
   }
+
+  const allPages = await Promise.all(pageRequestPromises);
+  allItems = [...allItems, ...allPages.flat()];
 
   log.debug('Found', allItems.length, 'products');
 
