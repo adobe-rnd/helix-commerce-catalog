@@ -16,7 +16,7 @@ kv_namespaces = [
 ]
 
 [[r2_buckets]]
-binding = "CATALOG_BUCKET"  # Access in script via env.MY_BUCKET
+binding = "CATALOG_BUCKET"
 preview_bucket_name = "adobe-commerce-catalog-dev"
 bucket_name = "adobe-commerce-catalog"
 
@@ -49,6 +49,11 @@ kv_namespaces = [
   { binding = "CONFIGS", id = "bb91e12a65a8462282396f32e63406f1", preview_id = "bb91e12a65a8462282396f32e63406f1" }
 ]
 
+[[env.ci.r2_buckets]]
+binding = "CATALOG_BUCKET"
+preview_bucket_name = "adobe-commerce-catalog-dev"
+bucket_name = "adobe-commerce-catalog-ci"
+
 [[env.ci.queues.producers]]
 queue = "adobe-commerce-catalog-queue"
 binding = "COMMERCE_QUEUE"
@@ -68,6 +73,25 @@ ENVIRONMENT = "ci"
 
 [env.production]
 name = "adobe-commerce-catalog"
+
+kv_namespaces = [
+  { binding = "CONFIGS", id = "bb91e12a65a8462282396f32e63406f1", preview_id = "bb91e12a65a8462282396f32e63406f1" }
+]
+
+[[env.production.r2_buckets]]
+binding = "CATALOG_BUCKET"
+preview_bucket_name = "adobe-commerce-catalog-dev"
+bucket_name = "adobe-commerce-catalog"
+
+[[env.production.queues.producers]]
+queue = "adobe-commerce-catalog-queue"
+binding = "COMMERCE_QUEUE"
+
+[[env.production.queues.consumers]]
+ queue = "adobe-commerce-catalog-queue"
+ binding = "COMMERCE_QUEUE"
+ max_batch_size = 10
+ max_batch_timeout = 5
 
 [env.production.vars]
 VERSION = "@@VERSION@@"
