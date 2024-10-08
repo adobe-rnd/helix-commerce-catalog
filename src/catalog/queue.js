@@ -22,8 +22,8 @@ export async function handleCatalogQueueRequest(ctx, config, skus) {
     skus: skus.map((item) => item.sku),
   });
 
-  log.debug('Syncing products', JSON.stringify(results));
   if (results.length > 0) {
+    log.debug('Syncing products to r2', results.length);
     await saveProductsToR2(ctx, config, results);
   }
 

@@ -33,20 +33,20 @@ const handlers = {
 
 export default {
   async queue(batch, env, pctx) {
-    console.log('Reading from queue', JSON.stringify(batch));
+    console.log('Reading from queue', batch.queue);
 
     const ctx = makeContext(pctx, env);
-    console.log('ctx', JSON.stringify(ctx));
+    const { log } = ctx;
     for (const msg of batch.messages) {
-      console.log('Queue message', JSON.stringify(msg));
-
       const { tenant, store } = msg.body.config;
+      log.debug('Message tenant:', tenant);
+      log.debug('Message store:', store);
+      log.debug('Message products:', msg.body.data.length);
+      log.debug('Message attempts:', msg.attempts);
+
       const config = await resolveConfig(ctx, tenant, store);
-      // eslint-disable-next-line no-await-in-loop
       const response = await handleCatalogQueueRequest(ctx, config, msg.body.data);
-      console.log('Response', JSON.stringify(response));
-      // TODO: do something with the message
-      // Explicitly acknowledge the message as delivered
+      log.debug('Response', JSON.stringify(response));
       msg.ack();
     }
   },
