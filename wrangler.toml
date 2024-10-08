@@ -54,7 +54,8 @@ queue = "adobe-commerce-catalog-queue"
 binding = "COMMERCE_QUEUE"
 
 [[env.ci.queues.consumers]]
- queue = "COMMERCE_QUEUE"
+ queue = "adobe-commerce-catalog-queue"
+ binding = "COMMERCE_QUEUE"
  max_batch_size = 10
  max_batch_timeout = 5
 
