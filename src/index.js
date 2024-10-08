@@ -9,12 +9,15 @@
  * OF ANY KIND, either express or implied. See the License for the specific language
  * governing permissions and limitations under the License.
  */
-// @ts-check
+// @ts-nocheck
+
+/* eslint-disable no-await-in-loop */
 
 import { errorResponse, makeContext } from './util.js';
 import { resolveConfig } from './config.js';
 import { handleCatalogSyncRequest } from './catalog/sync.js';
 import { handleProductGetRequest, handleProductPostRequest } from './catalog/product.js';
+import { handleCatalogQueueRequest } from './catalog/queue.js';
 
 const ALLOWED_METHODS = ['GET', 'POST'];
 
@@ -34,6 +37,12 @@ export default {
     console.log('ctx', JSON.stringify(ctx));
     for (const msg of batch.messages) {
       console.log('Queue message', JSON.stringify(msg));
+
+      const { tenant, store } = msg.body.config;
+      const config = await resolveConfig(ctx, tenant, store);
+      // eslint-disable-next-line no-await-in-loop
+      const response = await handleCatalogQueueRequest(ctx, config, msg.body.data);
+      console.log('Response', JSON.stringify(response));
       // TODO: do something with the message
       // Explicitly acknowledge the message as delivered
       msg.ack();

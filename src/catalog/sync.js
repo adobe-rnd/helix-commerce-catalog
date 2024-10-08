@@ -95,8 +95,11 @@ export async function handleCatalogSyncRequest(ctx, config) {
 
       const message = {
         type: 'catalog-sync',
-        config,
-        products: results,
+        config: {
+          tenant: config.tenant,
+          store: config.store,
+        },
+        data: results,
       };
 
       try {
