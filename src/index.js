@@ -32,8 +32,10 @@ const handlers = {
 };
 
 export default {
-  async queue(batch, env, ctx) {
+  async queue(batch, env, pctx) {
     console.log('Reading from queue', JSON.stringify(batch));
+
+    const ctx = makeContext(pctx, env);
     console.log('ctx', JSON.stringify(ctx));
     for (const msg of batch.messages) {
       console.log('Queue message', JSON.stringify(msg));
@@ -56,7 +58,7 @@ export default {
    * @returns {Promise<Response>}
    */
   async fetch(request, env, pctx) {
-    const ctx = makeContext(pctx, request, env);
+    const ctx = makeContext(pctx, env, request);
     if (!ALLOWED_METHODS.includes(ctx.info.method)) {
       return errorResponse(405, 'method not allowed');
     }

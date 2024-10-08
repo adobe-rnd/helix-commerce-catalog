@@ -58,17 +58,20 @@ export function errorWithResponse(status, xError, body = '') {
  * @param {Record<string, string>} env
  * @returns {Context}
  */
-export function makeContext(pctx, req, env) {
+export function makeContext(pctx, env, req) {
   /** @type {Context} */
   // @ts-ignore
   const ctx = pctx;
   ctx.env = env;
   ctx.url = new URL(req.url);
   ctx.log = console;
-  ctx.info = {
-    method: req.method,
-    headers: Object.fromEntries(req.headers),
-  };
+
+  if (req) {
+    ctx.info = {
+      method: req.method,
+      headers: Object.fromEntries(req.headers),
+    };
+  }
   return ctx;
 }
 
