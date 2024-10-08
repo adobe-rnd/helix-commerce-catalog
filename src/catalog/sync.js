@@ -14,7 +14,7 @@
 
 import coreProductsQuery from '../queries/core-all-products.js';
 import coreUpdatedProductsQuery from '../queries/core-all-updated-products.js';
-import { getSyncTimestamp } from '../utils/r2.js';
+import { getSyncTimestamp, setSyncTimestamp } from '../utils/r2.js';
 
 const PAGE_SIZE = 50;
 const MAX_CONCURRENT_REQUESTS = 25;
@@ -88,6 +88,7 @@ export async function handleCatalogSyncRequest(ctx, config) {
 
   if (!config.force) {
     const lastSync = await getSyncTimestamp(ctx, config);
+    log.debug('Last sync', lastSync);
     results = results.filter((item) => new Date(item.updated_at) > lastSync);
 
     if (results.length > 0) {
@@ -105,6 +106,8 @@ export async function handleCatalogSyncRequest(ctx, config) {
       try {
         await ctx.env.COMMERCE_QUEUE.send(message);
         log.debug('Sent message to queue', message);
+
+        await setSyncTimestamp(ctx, config);
       } catch (e) {
         log.error(e);
         return Response.json({ msg: e }, { status: 500 });

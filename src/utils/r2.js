@@ -13,6 +13,7 @@
 /* eslint-disable no-await-in-loop */
 
 export async function setSyncTimestamp(ctx, config) {
+  const { log } = ctx;
   const timestampKey = `${config.tenant}/${config.store}/.helix/last-sync.json`;
   const timestampData = {
     lastSyncDate: new Date().toISOString(),
@@ -23,6 +24,9 @@ export async function setSyncTimestamp(ctx, config) {
       contentType: 'application/json',
     },
   });
+
+  log.debug('Set last sync timestamp', timestampData);
+  log.debug(`${config.tenant}/${config.store}/.helix/last-sync.json`);
 }
 
 export async function getSyncTimestamp(ctx, config) {

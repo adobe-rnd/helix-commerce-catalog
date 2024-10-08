@@ -46,9 +46,16 @@ export default {
 
       const config = await resolveConfig(ctx, tenant, store);
       const response = await handleCatalogQueueRequest(ctx, config, msg.body.data);
-      log.debug('Response', JSON.stringify(response));
+      log.debug('Response', JSON.stringify(response.status));
       msg.ack();
     }
+
+    return new Response('', {
+      status: 200,
+      headers: {
+        'content-type': 'application/json',
+      },
+    });
   },
 
   /**
