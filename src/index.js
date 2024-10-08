@@ -30,11 +30,10 @@ const handlers = {
 
 export default {
   async queue(batch, env, ctx) {
-    console.log('Reading from queue', batch);
-    console.log('env', env);
-    console.log('env', ctx);
+    console.log('Reading from queue', JSON.stringify(batch));
+    console.log('ctx', JSON.stringify(ctx));
     for (const msg of batch.messages) {
-      console.log('Queue message', msg);
+      console.log('Queue message', JSON.stringify(msg));
       // TODO: do something with the message
       // Explicitly acknowledge the message as delivered
       msg.ack();
