@@ -63,10 +63,10 @@ export function makeContext(pctx, env, req) {
   // @ts-ignore
   const ctx = pctx;
   ctx.env = env;
-  ctx.url = new URL(req.url);
   ctx.log = console;
 
   if (req) {
+    ctx.url = new URL(req.url);
     ctx.info = {
       method: req.method,
       headers: Object.fromEntries(req.headers),
