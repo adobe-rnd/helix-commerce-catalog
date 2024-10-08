@@ -30,11 +30,17 @@ export const productFields = `
   ... on ConfigurableProduct {
     variants {
       attributes {
-      code
-      label
-      uid
-      value_index
-    }
+        code
+        label
+        uid
+        value_index
+      }
+      product {
+        id
+        sku
+        name
+        stock_status
+      }
     }
   }
   price_range {

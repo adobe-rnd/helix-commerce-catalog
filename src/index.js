@@ -29,6 +29,18 @@ const handlers = {
 };
 
 export default {
+  async queue(batch, env, ctx) {
+    console.log('Reading from queue', batch);
+    console.log('env', env);
+    console.log('env', ctx);
+    for (const msg of batch.messages) {
+      console.log('Queue message', msg);
+      // TODO: do something with the message
+      // Explicitly acknowledge the message as delivered
+      msg.ack();
+    }
+  },
+
   /**
    * @param {Request} request
    * @param {Record<string, string>} env
@@ -40,6 +52,8 @@ export default {
     if (!ALLOWED_METHODS.includes(ctx.info.method)) {
       return errorResponse(405, 'method not allowed');
     }
+
+    console.log('fetch', ctx.info.method, ctx.url.pathname);
 
     // eslint-disable-next-line no-unused-vars
     const [_, tenant, catalog, store, route] = ctx.url.pathname.split('/');

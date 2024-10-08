@@ -13,7 +13,64 @@
 /* eslint-disable no-await-in-loop */
 
 import coreProductsQuery from '../queries/core-all-products.js';
-import { getSyncTimestamp, saveProductsToR2, setSyncTimestamp } from '../utils/r2.js';
+import coreUpdatedProductsQuery from '../queries/core-all-updated-products.js';
+import { getSyncTimestamp } from '../utils/r2.js';
+
+const PAGE_SIZE = 50;
+const MAX_CONCURRENT_REQUESTS = 25;
+
+export async function fetchPage(config, queryBuilder, variables) {
+  const query = queryBuilder({ ...variables, pageSize: PAGE_SIZE });
+  const response = await fetch(config.coreEndpoint, {
+    method: 'POST',
+    headers: {
+      'x-api-key': config.apiKey,
+      'Magento-Environment-Id': config.magentoEnvironmentId,
+      'Magento-Website-Code': config.magentoWebsiteCode,
+      'Magento-Store-View-Code': config.magentoStoreViewCode,
+      'Magento-Store-Code': config.magentoStoreCode,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(query),
+  });
+
+  const result = await response.json();
+  return result.data.products;
+}
+
+export async function fetchAllProducts(config, queryBuilder, variables) {
+  let currentPage = 1;
+  let totalPages = 1;
+  let allItems = [];
+
+  const firstPage = await fetchPage(config, queryBuilder, { currentPage, ...variables });
+  totalPages = firstPage.page_info.total_pages;
+  allItems = firstPage.items;
+
+  currentPage = 2;
+
+  // Process pages in batches of MAX_CONCURRENT_REQUESTS
+  while (currentPage <= totalPages) {
+    const batchPromises = [];
+
+    // Create a batch of up to MAX_CONCURRENT_REQUESTS
+    // eslint-disable-next-line no-plusplus
+    for (let i = 0; i < MAX_CONCURRENT_REQUESTS && currentPage <= totalPages; i++) {
+      batchPromises.push(fetchPage(config, queryBuilder, { currentPage, ...variables }));
+      currentPage += 1;
+    }
+
+    // Wait for the current batch to resolve
+    const batchResults = await Promise.all(batchPromises);
+
+    // Collect items from the resolved pages
+    const items = batchResults.flatMap((page) => page.items);
+    allItems = [...allItems, ...items];
+  }
+
+  return allItems;
+}
 
 /**
  * Handle a request to sync the catalog
@@ -23,64 +80,86 @@ import { getSyncTimestamp, saveProductsToR2, setSyncTimestamp } from '../utils/r
  */
 export async function handleCatalogSyncRequest(ctx, config) {
   const { log } = ctx;
-  const pageSize = 50;
-  let currentPage = 1;
-  let totalPages = 1;
-  let allItems = [];
+  let results = [];
 
-  const fetchPage = async (page) => {
-    const query = coreProductsQuery({
-      pageSize,
-      currentPage: page,
-    });
-    const response = await fetch(config.coreEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify(query),
-    });
-
-    const result = await response.json();
-    return result.data.products;
-  };
-
-  // Fetch the first page to get total_pages
-  const firstPage = await fetchPage(currentPage);
-  totalPages = firstPage.page_info.total_pages;
-  allItems = firstPage.items;
-
-  // Loop through remaining pages and merge results
-  currentPage = 2;
-
-  const pageRequestPromises = [];
-  while (currentPage <= totalPages) {
-    pageRequestPromises.push(fetchPage(currentPage));
-    currentPage += 1;
-  }
-
-  const allPages = await Promise.all(pageRequestPromises);
-  allItems = [...allItems, ...allPages.flat()];
-
-  log.debug('Found', allItems.length, 'products');
-
-  const lastSync = await getSyncTimestamp(ctx, config);
-  log.debug('Last sync:', lastSync);
+  const query = config.force ? coreProductsQuery : coreUpdatedProductsQuery;
+  results = await fetchAllProducts(config, query);
+  console.log('Total products', results.length);
 
   if (!config.force) {
-    allItems = allItems.filter((item) => new Date(item.updated_at) > lastSync);
-    log.debug('Filtered', allItems.length, 'products');
+    const lastSync = await getSyncTimestamp(ctx, config);
+    results = results.filter((item) => new Date(item.updated_at) > lastSync);
+
+    if (results.length > 0) {
+      log.debug('Found', results.length, 'out of sync products');
+
+      const message = {
+        type: 'catalog-sync',
+        config,
+        products: results,
+      };
+
+      try {
+        await ctx.env.COMMERCE_QUEUE.send(message);
+        log.debug('Sent message to queue', message);
+      } catch (e) {
+        log.error(e);
+        return Response.json({ msg: e }, { status: 500 });
+      }
+    } else {
+      results = [];
+      log.debug('No out of sync products found');
+    }
   }
 
-  await saveProductsToR2(ctx, config, allItems);
-
-  await setSyncTimestamp(ctx, config);
-
-  return new Response(JSON.stringify(allItems), {
+  return new Response(JSON.stringify(results), {
     status: 200,
     headers: {
       'content-type': 'application/json',
     },
   });
 }
+
+// /**
+//  * Handle a request to sync the catalog
+//  * @param {Context} ctx
+//  * @param {Config} config
+//  * @returns {Promise<Response>}
+//  */
+// export async function handleCatalogSyncRequest(ctx, config) {
+//   const { log } = ctx;
+//   let results = [];
+
+//   const query = config.force ? coreProductsQuery : coreUpdatedProductsQuery;
+//   results = await fetchAllProducts(config, query);
+//   console.log('Total products', results.length);
+
+//   if (!config.force) {
+//     const lastSync = await getSyncTimestamp(ctx, config);
+//     results = results.filter((item) => new Date(item.updated_at) > lastSync);
+
+//     if (results.length > 0) {
+//       log.debug('Found', results.length, 'out of sync products');
+
+//       results = await fetchAllProducts(config, coreProductsBySku, {
+//         currentPage: 1,
+//         skus: results.map((item) => item.sku),
+//       });
+//     } else {
+//       results = [];
+//       log.debug('No out of sync products found');
+//     }
+//   }
+
+//   if (results.length > 0) {
+//     await saveProductsToR2(ctx, config, results);
+//   }
+
+//   await setSyncTimestamp(ctx, config);
+//   return new Response(JSON.stringify(results), {
+//     status: 200,
+//     headers: {
+//       'content-type': 'application/json',
+//     },
+//   });
+// }
