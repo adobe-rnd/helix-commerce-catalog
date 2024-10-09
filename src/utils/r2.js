@@ -42,16 +42,17 @@ export async function getSyncTimestamp(ctx, config) {
 }
 
 export async function saveProductsToR2(ctx, config, products) {
+  const { log } = ctx;
   const BATCH_SIZE = 50;
 
   const storeProductsBatch = async (batch) => {
     const storePromises = batch.map(async (product) => {
-      const { sku, name, url_key } = product;
-      const key = `${config.tenant}/${config.store}/${sku}.json`;
-      const body = JSON.stringify(product);
-      const customMetadata = { sku, name, url_key };
-
       try {
+        const { sku, name, url_key } = product;
+        const key = `${config.tenant}/${config.store}/${sku}.json`;
+        const body = JSON.stringify(product);
+        const customMetadata = { sku, name, url_key };
+
         const productPromise = ctx.env.CATALOG_BUCKET.put(key, body, {
           httpMetadata: { contentType: 'application/json' },
           customMetadata,
@@ -68,8 +69,8 @@ export async function saveProductsToR2(ctx, config, products) {
           return productPromise;
         }
       } catch (error) {
-        console.error(`Error storing product ${sku}:`, error);
-        throw error;
+        log.error(`Error storing product ${JSON.stringify(product)}:`, error);
+        return Promise.resolve();
       }
     });
 
@@ -80,4 +81,63 @@ export async function saveProductsToR2(ctx, config, products) {
     const batch = products.slice(i, i + BATCH_SIZE);
     await storeProductsBatch(batch);
   }
+}
+
+export async function listAllProducts(ctx, config) {
+  const bucket = ctx.env.CATALOG_BUCKET;
+
+  console.log(`${config.tenant}/${config.store}/`);
+  const listResponse = await bucket.list({ prefix: `${config.tenant}/${config.store}/` });
+  const files = listResponse.objects;
+
+  const batchSize = 50; // Define the batch size
+  const customMetadataArray = [];
+
+  const excludeDirectory = `${config.tenant}/${config.store}/urlkeys/`;
+
+  // Helper function to split the array into chunks of a specific size
+  function chunkArray(array, size) {
+    const result = [];
+    for (let i = 0; i < array.length; i += size) {
+      result.push(array.slice(i, i + size));
+    }
+    return result;
+  }
+
+  // Split the files array into chunks of 50
+  const fileChunks = chunkArray(files, batchSize);
+
+  // Process each chunk sequentially
+  for (const chunk of fileChunks) {
+    // Run the requests for this chunk in parallel
+    const chunkResults = await Promise.all(
+      chunk
+        .filter((file) => !file.key.includes('last-sync.json') && !file.key.startsWith(excludeDirectory))
+        .map(async (file) => {
+          const objectKey = file.key;
+
+          // Fetch the head response for each file
+          const headResponse = await bucket.head(objectKey);
+
+          if (headResponse) {
+            const { customMetadata } = headResponse;
+
+            return {
+              fileName: objectKey,
+              customMetadata: customMetadata || {},
+            };
+          } else {
+            return {
+              fileName: objectKey,
+              customMetadata: {},
+            };
+          }
+        }),
+    );
+
+    // Append the results of this chunk to the overall results array
+    customMetadataArray.push(...chunkResults);
+  }
+
+  return customMetadataArray;
 }

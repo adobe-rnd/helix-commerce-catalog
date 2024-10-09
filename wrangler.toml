@@ -20,20 +20,16 @@ binding = "CATALOG_BUCKET"
 preview_bucket_name = "adobe-commerce-catalog-dev"
 bucket_name = "adobe-commerce-catalog"
 
-[[queues.producers]]
-queue = "adobe-commerce-catalog-queue"
-binding = "COMMERCE_QUEUE"
-
-[[queues.consumers]]
- queue = "COMMERCE_QUEUE"
- max_batch_size = 10
- max_batch_timeout = 5
-
 # ----------------------------------------------------------------------
 # dev environment
 
 [env.dev]
 name = "adobe-commerce-catalog-dev"
+
+[[env.dev.r2_buckets]]
+binding = "CATALOG_BUCKET"
+preview_bucket_name = "adobe-commerce-catalog-dev"
+bucket_name = "adobe-commerce-catalog-ci"
 
 [env.dev.vars]
 VERSION = "@@VERSION@@-dev"
@@ -61,7 +57,7 @@ binding = "COMMERCE_QUEUE"
 [[env.ci.queues.consumers]]
  queue = "adobe-commerce-catalog-queue"
  binding = "COMMERCE_QUEUE"
- max_batch_size = 10
+ max_batch_size = 1
  max_batch_timeout = 5
 
 [env.ci.vars]

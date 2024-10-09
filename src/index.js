@@ -18,11 +18,13 @@ import { resolveConfig } from './config.js';
 import { handleCatalogSyncRequest } from './catalog/sync.js';
 import { handleProductGetRequest, handleProductPostRequest } from './catalog/product.js';
 import { handleCatalogQueueRequest } from './catalog/queue.js';
+import { handleCatalogListRequest } from './catalog/list.js';
 
 const ALLOWED_METHODS = ['GET', 'POST'];
 
 const handlers = {
   sync: async (ctx, config) => handleCatalogSyncRequest(ctx, config),
+  list: async (ctx, config) => handleCatalogListRequest(ctx, config),
   product: async (ctx, config) => {
     if (ctx.info.method === 'POST') {
       return handleProductPostRequest(ctx, config);

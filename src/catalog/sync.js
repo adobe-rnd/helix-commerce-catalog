@@ -12,12 +12,11 @@
 
 /* eslint-disable no-await-in-loop */
 
-import coreProductsQuery from '../queries/core-all-products.js';
 import coreUpdatedProductsQuery from '../queries/core-all-updated-products.js';
 import { getSyncTimestamp, setSyncTimestamp } from '../utils/r2.js';
 
-const PAGE_SIZE = 50;
-const MAX_CONCURRENT_REQUESTS = 25;
+const PAGE_SIZE = 200;
+const MAX_CONCURRENT_REQUESTS = 6;
 
 export async function fetchPage(config, queryBuilder, variables) {
   const query = queryBuilder({ ...variables, pageSize: PAGE_SIZE });
@@ -66,6 +65,8 @@ export async function fetchAllProducts(config, queryBuilder, variables) {
 
     // Collect items from the resolved pages
     const items = batchResults.flatMap((page) => page.items);
+
+    console.log('Batch results', items.length);
     allItems = [...allItems, ...items];
   }
 
@@ -81,41 +82,52 @@ export async function fetchAllProducts(config, queryBuilder, variables) {
 export async function handleCatalogSyncRequest(ctx, config) {
   const { log } = ctx;
   let results = [];
-
-  const query = config.force ? coreProductsQuery : coreUpdatedProductsQuery;
-  results = await fetchAllProducts(config, query);
+  results = await fetchAllProducts(config, coreUpdatedProductsQuery);
   console.log('Total products', results.length);
 
   if (!config.force) {
     const lastSync = await getSyncTimestamp(ctx, config);
     log.debug('Last sync', lastSync);
     results = results.filter((item) => new Date(item.updated_at) > lastSync);
+  }
 
-    if (results.length > 0) {
-      log.debug('Found', results.length, 'out of sync products');
+  if (results.length > 0) {
+    log.debug('Found', results.length, 'out of sync products');
 
-      const message = {
-        type: 'catalog-sync',
-        config: {
-          tenant: config.tenant,
-          store: config.store,
-        },
-        data: results,
-      };
-
-      try {
-        await ctx.env.COMMERCE_QUEUE.send(message);
-        log.debug('Sent message to queue', message);
-
-        await setSyncTimestamp(ctx, config);
-      } catch (e) {
-        log.error(e);
-        return Response.json({ msg: e }, { status: 500 });
+    // Helper to chunk the results into batches of 500
+    const chunkArray = (arr, chunkSize) => {
+      const chunks = [];
+      for (let i = 0; i < arr.length; i += chunkSize) {
+        chunks.push(arr.slice(i, i + chunkSize));
       }
-    } else {
-      results = [];
-      log.debug('No out of sync products found');
+      return chunks;
+    };
+
+    const productChunks = chunkArray(results, 200);
+
+    try {
+      for (const chunk of productChunks) {
+        const message = {
+          type: 'catalog-sync',
+          config: {
+            tenant: config.tenant,
+            store: config.store,
+          },
+          data: chunk,
+        };
+
+        await ctx.env.COMMERCE_QUEUE.send(message);
+        log.debug('Sent message to queue with', chunk.length, 'products');
+      }
+
+      await setSyncTimestamp(ctx, config);
+    } catch (e) {
+      log.error(e);
+      return Response.json({ msg: e }, { status: 500 });
     }
+  } else {
+    results = [];
+    log.debug('No out of sync products found');
   }
 
   return new Response(JSON.stringify(results), {
@@ -125,47 +137,3 @@ export async function handleCatalogSyncRequest(ctx, config) {
     },
   });
 }
-
-// /**
-//  * Handle a request to sync the catalog
-//  * @param {Context} ctx
-//  * @param {Config} config
-//  * @returns {Promise<Response>}
-//  */
-// export async function handleCatalogSyncRequest(ctx, config) {
-//   const { log } = ctx;
-//   let results = [];
-
-//   const query = config.force ? coreProductsQuery : coreUpdatedProductsQuery;
-//   results = await fetchAllProducts(config, query);
-//   console.log('Total products', results.length);
-
-//   if (!config.force) {
-//     const lastSync = await getSyncTimestamp(ctx, config);
-//     results = results.filter((item) => new Date(item.updated_at) > lastSync);
-
-//     if (results.length > 0) {
-//       log.debug('Found', results.length, 'out of sync products');
-
-//       results = await fetchAllProducts(config, coreProductsBySku, {
-//         currentPage: 1,
-//         skus: results.map((item) => item.sku),
-//       });
-//     } else {
-//       results = [];
-//       log.debug('No out of sync products found');
-//     }
-//   }
-
-//   if (results.length > 0) {
-//     await saveProductsToR2(ctx, config, results);
-//   }
-
-//   await setSyncTimestamp(ctx, config);
-//   return new Response(JSON.stringify(results), {
-//     status: 200,
-//     headers: {
-//       'content-type': 'application/json',
-//     },
-//   });
-// }
